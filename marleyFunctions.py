@@ -1,14 +1,14 @@
 
 class FrameReader(object):
     def __init__(self, filename):
-        # Open file
-        pass
+        file_ = open(filename, 'r')
+        print("Opened file: {0}".format(filename))
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # Close file
+        file_.close()
 
     def getNumFrames(self):
         """

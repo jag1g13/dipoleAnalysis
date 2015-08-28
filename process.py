@@ -167,7 +167,6 @@ def analyse(filename, natoms):
     """
     t_start = time.clock()
     np.set_printoptions(precision=3, suppress=True)
-    reader = FrameReader(filename)
     frame = Frame()
 
     if natoms == -1:
@@ -177,10 +176,11 @@ def analyse(filename, natoms):
     angles
 
     # Read in frame from trajectory
-    while reader.getFrame(frame):
-        # Process frame
-        angle1 = np.zeros(natoms)
-        angle2 = np.zeros(natoms)
+    with FrameReader(filename) as reader:
+        while reader.getFrame(frame):
+            # Process frame
+            angle1 = np.zeros(natoms)
+            angle2 = np.zeros(natoms)
 
     t_end = time.clock()
     print("\rCalculated {0} frames in {1}s\n".format(len(cg_frames), (t_end - t_start)) + "-"*20)
