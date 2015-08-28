@@ -1,8 +1,14 @@
 
 class FrameReader(object):
     def __init__(self, filename):
-        # open file
+        # Open file
         pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Close file
 
     def getNumFrames(self):
         """
@@ -11,6 +17,13 @@ class FrameReader(object):
         """
         timestep_values = readTimesteps(in_trajectory)    # Takes the values of all timesteps
         return len(timestep_values)
+
+    def getNumAtoms(self):
+        """
+        Get the number of atoms present in the open trajectory
+        :return: Number of atoms in trajectory
+        """
+        pass
 
     def readTimesteps(self):
         """ Function to read the timesteps from the input

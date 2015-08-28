@@ -4,11 +4,7 @@
 import sys
 import numpy as np
 import time
-import os.path
 import matplotlib.pyplot as plt
-from scipy import optimize
-import pylab as plb
-import pstats
 from math import sqrt
 from optparse import OptionParser
 
@@ -154,7 +150,7 @@ def print_output(output_all, output, request):
         print("{0}: {1:4.3f}".format("-".join(name), val))
 
 
-def graph_output(output_all, request):
+def graph_output(output_all):
     rearrange = zip(*output_all)
     plt.figure()
 
@@ -162,33 +158,29 @@ def graph_output(output_all, request):
         plt.subplot(2,3, i+1)
         data = plt.hist(item, bins=100, normed=1)
 
-        def f(x, a, b, c):
-            return a * plb.exp(-(x-b)**2.0 / (2*c**2))
 
-        x = [0.5*(data[1][j] + data[1][j+1]) for j in xrange(len(data[1])-1)]
-        y = data[0]
-
-        try:
-            popt, pcov = optimize.curve_fit(f, x, y)
-            x_fit = plb.linspace(x[0], x[-1], 100)
-            y_fit = f(x_fit, *popt)
-            plt.plot(x_fit, y_fit, lw=4, color="r")
-            print(popt, pcov)
-        except RuntimeError:
-            print("Failed to optimise fit")
-
-
-def analyse(filename):
+def analyse(filename, natoms):
     """
     Perform analysis of dipoles in LAMMPS trajectory
     :param lammpstrj: LAMMPS trajectory
     :return: Nothing
     """
     t_start = time.clock()
-    reader = FrameReader(filename)
     np.set_printoptions(precision=3, suppress=True)
+    reader = FrameReader(filename)
+    frame = Frame()
 
-    pass
+    if natoms == -1:
+        natoms = reader.getNumAtoms()
+    # Is it efficient to read the whole trajectory twice?
+    #nframes = reader.getNumFrames()
+    angles
+
+    # Read in frame from trajectory
+    while reader.getFrame(frame):
+        # Process frame
+        angle1 = np.zeros(natoms)
+        angle2 = np.zeros(natoms)
 
     t_end = time.clock()
     print("\rCalculated {0} frames in {1}s\n".format(len(cg_frames), (t_end - t_start)) + "-"*20)
@@ -200,6 +192,9 @@ if __name__ == "__main__":
     parser.add_option("-i", "--input",
                       action="store", type="string", dest="lammpstrj", default="",
                       help="Input file - LAMMPS trajectory", metavar="FILE")
+    parser.add_option("-n", "--natoms",
+                      action="store", type="int", dest="natoms", default="-1",
+                      help="Number of atoms to calculate for")
     # parser.add_option("-v", "--verbose",
     #                   action="store_true", dest="verbose", default=False,
     #                   help="Make more verbose")
@@ -208,4 +203,4 @@ if __name__ == "__main__":
     if not options.lammpstrj:
         print("Must provide LAMMPS trajectory to run")
         sys.exit(1)
-    analyse(options.lammmpstrj)
+    analyse(options.lammmpstrj, options.natoms)
