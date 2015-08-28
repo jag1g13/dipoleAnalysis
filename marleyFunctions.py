@@ -4,6 +4,31 @@ class FrameReader(object):
         # open file
         pass
 
+    def getNumFrames(self):
+        """
+        Get the number of frames present in the open trajectory
+        :return: Number of frames in trajectory
+        """
+        timestep_values = readTimesteps(in_trajectory)    # Takes the values of all timesteps
+        return len(timestep_values)
+
+    def readTimesteps(self):
+        """ Function to read the timesteps from the input
+        trajectory, so that these can be written into the
+        output file.
+        lammpstrj - the raw, unedited trajectory. """
+        count = 0       # Used to keep track of the lines
+        timesteps = []  # Used to store the timestep values
+        for line in lammpstrj:
+            if line[:14] == "ITEM: TIMESTEP":
+                timesteps.append(lammpstrj[count + 1])   # Line after the declaration contains the timestep
+                count += 1
+                continue
+            else:
+                count += 1
+                continue
+        return timesteps    # Length of this list will be equal to the number of frames
+
     def readAtomCoords(lammpstrj, raw_atom_lines):
         """ Function to obtain the x,y,z coordinates for
         a particular atom at each frame in the trajectory.

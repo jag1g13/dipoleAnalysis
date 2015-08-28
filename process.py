@@ -8,61 +8,9 @@ import os.path
 import matplotlib.pyplot as plt
 from scipy import optimize
 import pylab as plb
-import cProfile
 import pstats
 from math import sqrt
 from optparse import OptionParser
-
-verbose = False
-
-sugar_atom_nums = {}
-
-sugar_atoms = ["C1", "O1", "HO1", "C2", "O2", "HO2",\
-               "C3", "O3", "HO3", "C4", "O4", "HO4",\
-               "C5", "O5", "C6",  "O6", "HO6"]
-
-#atomic charges
-atomic_charges = {"C4": 0.232, "O4": -0.642, "HO4": 0.410, "C3": 0.232, "O3": -0.642, "HO3": 0.410, "C2": 0.232, "O2": -0.642,\
-                  "HO2": 0.410, "C6": 0.232, "O6": -0.642, "HO6": 0.410, "C5": 0.376, "O5": -0.480, "C1": 0.232, "O1": -0.538,\
-                  "HO1": 0.410, "HW1": 0.41, "HW2": 0.41, "OW": -0.82}
-               
-#bond lengths we want to know
-bond_pairs = [["C1", "O1"], ["O1", "HO1"], ["C1", "C2"],\
-              ["C2", "O2"], ["O2", "HO2"], ["C2", "C3"],\
-              ["C3", "O3"], ["O3", "HO3"], ["C3", "C4"],\
-              ["C4", "O4"], ["O4", "HO4"], ["C4", "C5"],\
-              ["C5", "O5"], ["C5", "C6"],\
-              ["C6", "O6"], ["O6", "HO6"]]
-
-#bond angles we want to know
-bond_triples = [["O1", "C1", "C2"], ["C1", "O1", "HO1"], ["C1", "C2", "O2"], ["C1", "C2", "C3"],\
-                ["O2", "C2", "C3"], ["C2", "O2", "HO2"], ["C2", "C3", "O3"], ["C2", "C3", "C4"],\
-                ["O3", "C3", "C4"], ["C3", "O3", "HO3"], ["C3", "C4", "O4"], ["C3", "C4", "C5"],\
-                ["O4", "C4", "C5"], ["C4", "O4", "HO4"], ["C4", "C5", "C6"], ["C4", "C5", "O5"],\
-                ["C6", "O5", "C1"], ["C5", "C6", "HO6"], ["C5", "O5", "C1"],\
-                ["O5", "C1", "O1"], ["O5", "C1", "C2"]]
-
-#bond dihedrals we want to know
-bond_quads = []
-
-#names of the cg sites
-cg_sites = ["C1", "C2", "C3", "C4", "C5", "O5"]
-
-#atom numbers of the cg sites
-cg_atom_nums = {}
-
-#bonds between cg sites
-cg_bond_pairs = [["C1", "C2"], ["C2", "C3"], ["C3", "C4"], ["C4", "C5"],\
-                 ["C5", "O5"], ["O5", "C1"]]
-
-#bond angles between cg sites
-cg_bond_triples = [["O5", "C1", "C2"], ["C1", "C2", "C3"], ["C2", "C3", "C4"],\
-                   ["C3", "C4", "C5"], ["C4", "C5", "O5"], ["C5", "O5", "C1"]]
-
-#bond dihedrals between cg sites
-cg_bond_quads = [["O5", "C1", "C2", "C3"], ["C1", "C2", "C3", "C4"],\
-                 ["C2", "C3", "C4", "C5"], ["C3", "C4", "C5", "O5"],\
-                 ["C4", "C5", "O5", "C1"], ["C5", "O5", "C1", "C2"]]
 
 class Atom:
     def __init__(self, atom_type, coords, dipole):
@@ -74,11 +22,9 @@ class Atom:
         return "<Atom {0} charge={1}, mass={2} @ {3}, {4}, {5}>".format(self.atom_type, *self.coords, *self.dipole)
 
 class Frame:
-    def __init__(self, num, atom_nums=sugar_atom_nums):
+    def __init__(self, num):
         self.num = num
         self.atoms = []
-        self.atom_nums = atom_nums
-        self.calc_measure = {"length": self.get_bond_lens, "angle": self.get_bond_angles, "dihedral": self.get_bond_dihedrals}
 
     def __repr__(self):
         return "<Frame {0} containing {1} atoms>\n{2}".format(self.num, len(self.atoms), self.title)
@@ -193,74 +139,14 @@ def polar_coords(xyz, axis1=np.array([0,0,0]), axis2=np.array([0,0,0]), mod=True
     polar[0] = np.sqrt(xy + xyz[2]**2)
     polar[1] = np.arctan2(np.sqrt(xy), xyz[2]) - axis1[1]
     polar[2] = np.arctan2(xyz[1], xyz[0]) - axis2[2]
+
     if axis2[1]<0:
         polar[2] = polar[2] + tpi
     if mod:
         polar[1] = polar[1]%(tpi)
         polar[2] = polar[2]%(tpi)
-    return polar
 
-def calc_dipoles(cg_frames, frames, export=True, cg_internal_bonds=cg_internal_bonds, sugar_atom_nums=sugar_atom_nums, adjacent=adjacent):
-    """
-    starting to think this might be impossible
-    dipole of a charged fragment is dependent on where you measure it from
-    where should it be measured from??
-    
-    
-    should modify this to include OW dipoles
-    modify to drop frames I'm not using - optimise
-    """
-    print("Calculating dipoles")
-    t_start = time.clock()
-    old_dipoles = False
-    if export:
-        f = open("dipoles.csv", "a")
-    dipoles = []
-    for curr_frame, cg_frame in enumerate(cg_frames):
-        perc = curr_frame * 100. / len(cg_frames)
-        if(curr_frame%100 == 0):
-            sys.stdout.write("\r{:2.0f}% ".format(perc) + "X" * int(0.2*perc) + "-" * int(0.2*(100-perc)) )
-            sys.stdout.flush()
-        frame_dipoles = np.zeros((len(cg_sites),3))
-        for i, site in enumerate(cg_sites):
-            #if site.atom_type == "OW":
-                #continue
-            dipole = np.zeros(3)
-            #print(site.atom_type)
-            if old_dipoles:
-                #next 4 lines measure dipole from origin - also inefficient method
-                for j, bond in enumerate(cg_internal_bonds[site]):
-                    atom1 = frames[curr_frame].atoms[sugar_atom_nums[bond[0]]]
-                    atom2 = frames[curr_frame].atoms[sugar_atom_nums[bond[1]]]
-                    dipole += (atom1.loc - atom2.loc) * (atom1.charge - atom2.charge)
-            else:
-                #5 lines measure dipole from centre of charge - seems reasonable
-                for atom_name in cg_internal_map[site]:
-                    atom = frames[curr_frame].atoms[sugar_atom_nums[atom_name]]
-                    dipole += atom.loc * atom.charge #first calc from origin
-                cg_atom = cg_frame.atoms[cg_atom_nums[site]]
-                dipole -= cg_atom.loc * cg_atom.charge #then recentre it
-                #adjust this to check if it's just giving me the coords back
-                #dipole += cg_atom.loc
-            #next 4 lines measure dipole from cg_bead location - ignores charge on C
-            #cg_atom = cg_frame.atoms[cg_atom_nums[site]]
-            #for atom_name in cg_internal_map[site]:
-                #atom = frames[curr_frame].atoms[sugar_atom_nums[atom_name]]
-                #dipole += (atom.loc - cg_atom.loc) * atom.charge
-            norm, bisec = cg_frame.angle_norm_bisect(cg_atom_nums[adjacent[site][0]], i, cg_atom_nums[adjacent[site][1]])
-            frame_dipoles[i] += polar_coords(dipole, norm, bisec)
-            #if frame_dipoles[i][0] < 0.1:
-                #print("No dipole--why?")
-        if export:
-            #f.write("Frame_"+str(curr_frame))
-            np.savetxt(f, frame_dipoles, delimiter=",")
-        dipoles.append(frame_dipoles)
-    if export:
-        #f.write("Finished frames")
-        f.close()
-    t_end = time.clock()
-    print("\rCalculated {0} frames in {1}s\n".format(len(frames), (t_end - t_start)) + "-"*20)
-    return dipoles
+    return polar
 
 
 def print_output(output_all, output, request):
@@ -271,13 +157,17 @@ def print_output(output_all, output, request):
 def graph_output(output_all, request):
     rearrange = zip(*output_all)
     plt.figure()
+
     for i, item in enumerate(rearrange):
         plt.subplot(2,3, i+1)
         data = plt.hist(item, bins=100, normed=1)
+
         def f(x, a, b, c):
             return a * plb.exp(-(x-b)**2.0 / (2*c**2))
+
         x = [0.5*(data[1][j] + data[1][j+1]) for j in xrange(len(data[1])-1)]
         y = data[0]
+
         try:
             popt, pcov = optimize.curve_fit(f, x, y)
             x_fit = plb.linspace(x[0], x[-1], 100)
@@ -288,24 +178,18 @@ def graph_output(output_all, request):
             print("Failed to optimise fit")
 
 
-def export_props(grofile, xtcfile, energyfile="", export=False, do_dipoles=False, cutoff=0, cm_map=False):
-    global verbose
+def analyse(filename):
+    """
+    Perform analysis of dipoles in LAMMPS trajectory
+    :param lammpstrj: LAMMPS trajectory
+    :return: Nothing
+    """
     t_start = time.clock()
-    frames, cg_frames = read_xtc_coarse(grofile, xtcfile, keep_atomistic=do_dipoles, cutoff=cutoff, cm_map=cm_map)
+    reader = FrameReader(filename)
     np.set_printoptions(precision=3, suppress=True)
-    if cutoff:
-        solvent_rdf(cg_frames, export=export)
-    if energyfile:
-        read_energy(energyfile, export=export)
-    cg_all_dists, cg_dists = calc_measures(cg_frames, "length", cg_bond_pairs, export=export)
-    cg_all_angles, cg_angles = calc_measures(cg_frames, "angle", cg_bond_triples, export=export)
-    cg_all_dihedrals, cg_dihedrals = calc_measures(cg_frames, "dihedral", cg_bond_quads, export=export)
-    if do_dipoles:
-        cg_dipoles = calc_dipoles(cg_frames, frames, export)
-    if verbose:
-        print_output(cg_all_dists, cg_dists, cg_bond_pairs)
-        print_output(cg_all_angles, cg_angles, cg_bond_triples)
-        print_output(cg_all_dihedrals, cg_dihedrals, cg_bond_quads)
+
+    pass
+
     t_end = time.clock()
     print("\rCalculated {0} frames in {1}s\n".format(len(cg_frames), (t_end - t_start)) + "-"*20)
     return len(cg_frames)
@@ -324,10 +208,4 @@ if __name__ == "__main__":
     if not options.lammpstrj:
         print("Must provide LAMMPS trajectory to run")
         sys.exit(1)
-    if verbose:
-        cProfile.run("export_props(options.grofile, options.xtcfile, energyfile=options.energyfile, export=options.export, do_dipoles=options.dipoles, cutoff=options.cutoff, cm_map=options.cm_map)", "profile")
-        p = pstats.Stats("profile")
-        #p.sort_stats('cumulative').print_stats(25)
-        p.sort_stats('time').print_stats(25)
-    else:
-        export_props(options.grofile, options.xtcfile, energyfile=options.energyfile, export=options.export, do_dipoles=options.dipoles, cutoff=options.cutoff, cm_map=options.cm_map)
+    analyse(options.lammmpstrj)
