@@ -1,4 +1,6 @@
 
+xxxxxxxxxxx
+
 class FrameReader(object):
     def __init__(self, filename):
         # Open file
