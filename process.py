@@ -6,8 +6,6 @@ import numpy as np
 import time
 import os.path
 import matplotlib.pyplot as plt
-import MDAnalysis.coordinates.xdrfile.libxdrfile2 as xdr
-import MDAnalysis.core.AtomGroup as AtomGroup
 from scipy import optimize
 import pylab as plb
 import cProfile
@@ -67,22 +65,18 @@ cg_bond_quads = [["O5", "C1", "C2", "C3"], ["C1", "C2", "C3", "C4"],\
                  ["C4", "C5", "O5", "C1"], ["C5", "O5", "C1", "C2"]]
 
 class Atom:
-    def __init__(self, atom_type, loc, charge, mass=1):
+    def __init__(self, atom_type, coords, dipole):
         self.atom_type = atom_type
-        self.loc = loc
-        self.charge = charge
-        self.mass = mass
-        self.neighbours = []
+        self.coords = coords
+        self.dipole = dipole
 
     def __repr__(self):
-        return "<Atom {0} charge={1}, mass={2} @ {3}, {4}, {5}>".format(self.atom_type, self.charge, self.mass, *self.loc)
+        return "<Atom {0} charge={1}, mass={2} @ {3}, {4}, {5}>".format(self.atom_type, *self.coords, *self.dipole)
 
 class Frame:
     def __init__(self, num, atom_nums=sugar_atom_nums):
         self.num = num
         self.atoms = []
-        self.remark = []
-        self.title = ""
         self.atom_nums = atom_nums
         self.calc_measure = {"length": self.get_bond_lens, "angle": self.get_bond_angles, "dihedral": self.get_bond_dihedrals}
 
@@ -319,34 +313,16 @@ def export_props(grofile, xtcfile, energyfile="", export=False, do_dipoles=False
 
 if __name__ == "__main__":
     parser = OptionParser()
-    parser.add_option("-g", "--gro",
-                      action="store", type="string", dest="grofile",
-                      help="Gromacs .gro topology", metavar="FILE")
-    parser.add_option("-x", "--xtc",
-                      action="store", type="string", dest="xtcfile",
-                      help="Gromacs .xtc trajectory", metavar="FILE")
-    parser.add_option("-E", "--energy",
-                      action="store", type="string", dest="energyfile", default="",
-                      help="Parse energies from log file", metavar="FILE")
-    parser.add_option("-r", "--rdf",
-                      action="store", type="int", dest="cutoff", default=0,
-                      help="Cutoff radius for RDF calculation", metavar="INT")
-    parser.add_option("-e", "--export",
-                      action="store_true", dest="export", default=False,
-                      help="Save data to .csv files in working directory")
-    parser.add_option("-d", "--dipole",
-                      action="store_true", dest="dipoles", default=False,
-                      help="Calculate dipoles")
-    parser.add_option("-m", "--mass",
-                      action="store_true", dest="cm_map", default=False,
-                      help="Use centre of mass mapping")
-    parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose", default=False,
-                      help="Make more verbose")
+    parser.add_option("-i", "--input",
+                      action="store", type="string", dest="lammpstrj", default="",
+                      help="Input file - LAMMPS trajectory", metavar="FILE")
+    # parser.add_option("-v", "--verbose",
+    #                   action="store_true", dest="verbose", default=False,
+    #                   help="Make more verbose")
     (options, args) = parser.parse_args()
     verbose = options.verbose
-    if not options.grofile or not options.xtcfile:
-        print("Must provide .gro and .xtc files to run")
+    if not options.lammpstrj:
+        print("Must provide LAMMPS trajectory to run")
         sys.exit(1)
     if verbose:
         cProfile.run("export_props(options.grofile, options.xtcfile, energyfile=options.energyfile, export=options.export, do_dipoles=options.dipoles, cutoff=options.cutoff, cm_map=options.cm_map)", "profile")
